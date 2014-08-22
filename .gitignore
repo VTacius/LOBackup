@@ -20,3 +20,4 @@ nytprof.out
 *.bs
 
 # No se te ocurra enviar los backup internos
+*.ldif
