@@ -6,29 +6,45 @@ use Net::LDAP;
 use Net::LDAP::LDIF;
 use Authen::SASL;
 
+=pod
+
+=head1 DESCRIPTION
+
+El script requiere que el paquete Authen::SASL este instalado. 
+A cambio, no habra que preocuparse en configurar contrasenias.
+Tampoco se precupe en hallar la base correcta de su arbol LDAP:
+El script ha de preocuparse de todas esas cuestiones
+=cut
+
 # Configuración adicional que podemos dejar por defecto
-my $ID_SERVER = "";
-my $usuario = "";
+# Nombre con el que identificamos al servidor dentro del esquema de respaldo. 
+# Por defecto, su valor es `hostname`
+my $ID_SERVER = "base";
+# Usuario con que el tenemos configuradas las claves publicas para acceder al servidor de respaldo
+my $usuario = "cpenate";
 
 # Configuración que mantiene compatibilidad con los demás script y de importancia capital
 my $servidor_respaldo = "192.168.2.16";
-# Configuración que mantiene compatibilidad con los demás script
-my $fecha = strftime( "%Y%m%d", localtime(time) );
-my $fecha_archivo = strftime( "%s%m%Y-%H%M", localtime(time) );
 my $ruta_respaldo = "/var/respaldo/ldap";
 my $ruta_respaldo_remoto = "/var/respaldo/$ID_SERVER/ldap";
 
+# Configuramos las fechas para estampar el nombre de los ficheros. 
+# Claro que puede cambiarlas por una que sean más de su gusto
+my $fecha = strftime( "%d / %m / %Y", localtime(time) );
+my $fecha_archivo = strftime( "%s%m%Y-%H%M", localtime(time) );
+
 # Falta implementarlo
+my $usuario_local = "root";
 my $ruta_log_remoto = "/var/respaldo";
 my $ruta_log_local = "/var/respaldo";
 my $correos_notificacion = 'correo@dominio.com.sv';
 
-# Creamos rutas en base a los datos anteriores recogidos
-my $ruta_respaldo_datos = "$ruta_respaldo/datos";
-my $ruta_respaldo_conf = "$ruta_respaldo/config";
-my $estado="Ejecución correcta";
+# Directorio dentro de $ruta_respaldo donde guardaremos los ficheros.
+# En vista a ser lo más configurable posible
+my $ruta_respaldo_datos = "datos";
+my $ruta_respaldo_conf = "config";
 
-# Mensaje de ayuda
+# Mensaje de ayuda sobre el uso, a desplegarse si no da una opción correcta
 sub ayuda{
     print "\nUso: [ datos | configuracion ]\n\n"
 }
@@ -39,11 +55,12 @@ if ($#ARGV < 0){
     exit;
 }
 
+# Confirmamos que sea una opción correcta
 if ( $ARGV[0] !~ m/^(datos|configuracion)$/){
     ayuda();
     exit;
 }
-
+#### Empiezan los procedimientos para backup propiamente dichos
 # Obtiene la base mínima del árbol LDAP
 sub base{
     my $ldap = Net::LDAP->new("ldapi://%2fvar%2frun%2fslapd%2fldapi") or die "$@";
@@ -79,7 +96,7 @@ sub tuerca{
         $msg=busqueda($bases, "one");
         # La entrada, cualquiera que sea su naturaleza, tiene entradas hijas
         if ($msg->count()>0){
-            my $ldif = Net::LDAP::LDIF->new( "$ruta_respaldo_datos/$bases.ldif", "w") or die "$@";
+            my $ldif = Net::LDAP::LDIF->new( "$bases.ldif", "w") or die "$@";
             $ldif->write( $msg->entries );
             tuerca($bases, $msg);
         }
@@ -88,31 +105,50 @@ sub tuerca{
 
 sub clavo {
     my ($msg) = @_;
-    my $ldif = Net::LDAP::LDIF->new( "$ruta_respaldo_conf/config.ldif","w" ) or die "$@";
+    my $ldif = Net::LDAP::LDIF->new( "config.ldif","w" ) or die "$@";
     $ldif->write( $msg->entries );
 }
 
 sub empaquetar {
-    my ($archivo) = @_;
-    my $resultado_tar = `tar -czvf $archivo.tar.gz $archivo 2>&1`;
+    my ($archivo, $estampa) = @_;
+    my $resultado_tar = `tar -czvf $archivo-$estampa.tar.gz $archivo 2>&1`;
+    return $resultado_tar;
 }
 
 sub envio {
     my ($origen, $destino) = @_;
-    my $resultado_env = `scp $origen $usuario\@$servidor_respaldo:$destino`;
+    my $resultado_env = `scp $origen $usuario\@$servidor_respaldo:$destino 2>&1`;
+    return $resultado_env;
+}
+
+sub mensaje{
+    my ($operacion, $codigo_devuelto, $msg_devuelto) = @_;
+    my $estado = $codigo_devuelto =~ 0 ? "Correcto": "Error";
+    my $mensaje = "\tLa operacion $operacion ha terminado con Estado: $estado \n";
+    #my $retorno = $msg_devuelto =~ '' ? "La operacion no devuelve mensaje de error desde consola en una ejecución exitosa\n" : $msg_devuelto . "\n" ;
+    return $mensaje . $msg_devuelto;
 }
 
 # Acción a realizar
 if ($ARGV[0] =~ "datos"){
+    # Nos movemos al área de trabajo
+    chdir($ruta_respaldo);
+
+    # Creamos los ficheros con el backup
     my $bases = base();
-    my $msg=busqueda($bases, "one");
+    my $msg = busqueda($bases, "one");
     tuerca($bases, $msg);
-    empaquetar($ruta_respaldo_datos);
-    envio("$ruta_respaldo_datos.tar.gz", $ruta_respaldo_remoto)
+
+    # Empaquetamos y enviamos archivos
+    $msg = empaquetar($ruta_respaldo_datos, $fecha_archivo);
+    print mensaje("Empaquetado", $?, $msg);
+    $msg = envio("$ruta_respaldo_datos-$fecha_archivo.tar.gz", $ruta_respaldo_remoto);
+    print mensaje("Envio", $?, $msg);
 } else {
     my $bases = "cn=config";
     my $msg=busqueda($bases, "sub");
     clavo($msg);
-    empaquetar($ruta_respaldo_conf);
-    envio("$ruta_respaldo_conf.tar.gz", $ruta_respaldo_remoto)
+    #empaquetar($ruta_respaldo_conf);
+    print $?;
+    #envio("$ruta_respaldo_conf.tar.gz", $ruta_respaldo_remoto)
 }
