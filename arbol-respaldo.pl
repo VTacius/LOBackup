@@ -16,6 +16,22 @@ Tampoco se precupe en hallar la base correcta de su arbol LDAP:
 El script ha de preocuparse de todas esas cuestiones
 =cut
 
+sub configuracion{
+    my ($fichero) = @_;
+    my ($config_line, %Config, $item, $valor, @cadena);
+    open(my $conf, "<", $fichero) or die("Error Abriendo el fichero de configuracion");
+    while(<$conf>){
+        $config_line=$_;
+        if ( ($config_line !~ /^(#|$)/) ){ 
+            my @cadena = split (/=/, $config_line, 2); 
+            $item = $cadena[0];        
+            $valor = $cadena[1];
+            $Config{$item} = $valor;
+        }
+    }
+    return %Config;
+}
+
 # Configuración adicional que podemos dejar por defecto
 # Nombre con el que identificamos al servidor dentro del esquema de respaldo. 
 # Por defecto, su valor es `hostname`
