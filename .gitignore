@@ -23,3 +23,5 @@ nytprof.out
 *.ldif
 # Ni se te ocurra dar a enterar que usas vim
 *.swp
+# El archivo de configuracion
+parametros.conf
