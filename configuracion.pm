@@ -1,7 +1,13 @@
 #!/usr/bin/perl
+package configuracion; 
+
 use strict;
 use warnings;
 use POSIX;
+use Exporter;
+
+our @ISA    = qw(Exporter);
+our @EXPORT = qw(configurando);
 
 sub espacios{
     my ($palabrejo) = @_;
@@ -16,7 +22,7 @@ sub fechador{
     $Config->{$clave} = strftime($Config->{$clave}, localtime(time));
 }
 
-sub configuracion{
+sub configurando{
     my ($fichero) = @_;
     my ($config_line, %Config, $item, $valor, @cadena);
     open(my $conf, "<", $fichero) or die("Error Abriendo el fichero de configuracion");
@@ -41,9 +47,4 @@ sub configuracion{
     }
     return %Config;
 }
-
-my %Config = configuracion("parametros.conf");
-
-#foreach my $item (keys(%Config)){
-#    print $item . ": " .$Config{$item} . "\n"
-#}
+1;
